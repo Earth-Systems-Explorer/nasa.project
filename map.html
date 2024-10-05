@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D World Map with Environmental Status and Additional Data</title>
+
+    <style>
+        body { margin: 0%; padding: 0%; }
+        #map { position: absolute; top: 0%; bottom: 0%; width: 100%; }
+        #info { position: absolute; top: 10px; right: 10px; background: white; padding: 10px; z-index: 2; display: none; }
+        #geocoder { position: absolute; top: 10px; left: 10px; z-index: 1; }
+        #legend { position: absolute; bottom: 50px; left: 10px; background: white; padding: 10px; z-index: 3; }
+        #buttons { position: fixed; bottom: 10px; right: 10px; z-index: 2; }
+        .legend-item { display: flex; align-items: center; margin-bottom: 5px; }
+        .legend-color { width: 20px; height: 20px; margin-right: 5px; }
+        .icon { width: 20px; height: 20px; margin-right: 5px; vertical-align: middle; }
+        button { margin: 5px; padding: 10px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background-color: #45a049; }
+        #awareness { position: absolute; bottom: 10px; left: 10px; z-index: 2; background: white; padding: 10px; font-size: 12px; max-width: 200px; }
+    </style>
+
+    <script src='https://api.mapbox.com/mapbox-gl-js/v2.9.1/mapbox-gl.js'></script>
+    <link href='https://api.mapbox.com/mapbox-gl-js/v2.9.1/mapbox-gl.css' rel='stylesheet' />
+    <script src='https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v4.7.0/mapbox-gl-geocoder.min.js'></script>
+    <link href='https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v4.7.0/mapbox-gl-geocoder.css' rel='stylesheet' />
+</head>
+<body>
+
+    <div id="geocoder"></div>
+    <div id='map' style='width: 100%; height: 100%;'></div>
+    <div id="info">Right-click anywhere on the map to get environmental status</div>
+
+    <div id="buttons">
+        <button id="goLiveButton">Go Live</button>
+        <button id="forecastButton">Imagine our Connected Earth</button>
+        <button id="muteButton">Mute</button> <!-- زر الميوت -->
+        <button id="locateButton">Locate Me</button> <!-- زر تحديد الموقع -->
+        <button id="suggest">suggestion of ...</button> <!-- زر تحديد الموقع -->
+    </div>
+
+    <div id="legend">
+        <strong>Environmental Status</strong>
+        <div class="legend-item"><div class="legend-color" style="background-color: red;"></div> Dangerous (Above 40°C)</div>
+        <div class="legend-item"><div class="legend-color" style="background-color: #bcad0b;"></div> Normal (30°C to 39°C)</div>
+        <div class="legend-item"><div class="legend-color" style="background-color: green;"></div> Good (16°C to 29°C)</div>
+        <div class="legend-item"><div class="legend-color" style="background-color: orange;"></div> Warning (0°C to 15°C)</div>
+        <div class="legend-item"><div class="legend-color" style="background-color: red;"></div> Dangerous (Below 0°C)</div>
+    </div>
+
+    <audio id="backgroundAudio" loop>
+        <source src="1.mp3" type="audio/mpeg"> <!-- قم بتغيير المسار إلى ملف الصوت الخاص بك -->
+        Your browser does not support the audio element.
+    </audio>
+
+    <!-- إضافة حوار التوعية -->
+    <div id="awareness">
+        <strong>Climate Awareness:</strong><br>
+        - تأثيرات تغير المناخ على الهواء<br>
+        - تأثيرات على التنوع البيولوجي<br>
+        - تأثيرات على الزراعة<br>
+        - تأثيرات على موارد المياه<br>
+        - تأثيرات على مستويات البحر<br>
+        - تأثيرات على الطاقة المتجددة<br>
+        - تأثيرات على الحرائق<br>
+        - تأثيرات على الغازات الدفيئة
+    </div>
+
+    
+    <script>
+        // إعداد الصوت
+        var audio = document.getElementById('backgroundAudio');
+        audio.play();
+        
+        // إعدادات الميوت
+        var isMuted = false;
+
+        document.getElementById('muteButton').addEventListener('click', function() {
+            isMuted = !isMuted;
+            audio.muted = isMuted;
+            this.innerText = isMuted ? "Unmute" : "Mute"; // تغيير نص الزر
+        });
+
+        mapboxgl.accessToken = 'pk.eyJ1IjoiZG9tdGkxMDAiLCJhIjoiY20xdW5sM2JlMDJ0MDJrcjNicDZ0YnhkNiJ9.rA1NItQQH4OJ_tNZlom1DA';
+
+        var map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/satellite-streets-v12',
+            center: [0, 0],
+            zoom: 2
+        });
+
+        var geocoder = new MapboxGeocoder({
+            accessToken: mapboxgl.accessToken,
+            mapboxgl: mapboxgl,
+            placeholder: 'Search for a location...',
+            zoom: 8,
+            marker: true
+        });
+        document.getElementById('geocoder').appendChild(geocoder.onAdd(map));
+
+        async function getWeatherData(lat, lon) {
+            const apiKey = 'e6fa02ac36ffa25e6074fc5d1a432e36';
+            const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}`;
+
+            try {
+                let response = await fetch(url);
+                let data = await response.json();
+                return data.main.temp;
+            } catch (error) {
+                console.error("Error fetching weather data:", error);
+                return null;
+            }
+        }
+
+        async function getAdditionalData(lat, lon) {
+            return {
+                seaLevel: "30 cm",
+                globalTemperature: "14°C",
+                arcticSeaIce: "5.5 million km²",
+                carbonDioxide: "400 ppm",
+                wind: "10 km/h",
+                humidity: "60%"
+            };
+        }
+
+        function getPlanetStatus(temp) {
+            if (temp < 0) {
+                return { status: "Dangerous", color: "red" };
+            } else if (temp >= 0 && temp <= 15) {
+                return { status: "Warning", color: "orange" };
+            } else if (temp > 15 && temp <= 29.99) {
+                return { status: "Good", color: "green" };
+            } else if (temp >= 30 && temp <= 39) {
+                return { status: "Normal", color: "#ffea00" };
+            } else {
+                return { status: "Dangerous", color: "red" };
+            }
+        }
+
+        map.on('contextmenu', async function (e) {
+            var coordinates = e.lngLat;
+            var lat = coordinates.lat;
+            var lon = coordinates.lng;
+
+            document.getElementById('info').style.display = "block";
+            document.getElementById('info').innerHTML = `Fetching environmental status for coordinates: [${lon}, ${lat}]...`;
+
+            var temp = await getWeatherData(lat, lon);
+            var additionalData = await getAdditionalData(lat, lon);
+
+            if (temp !== null) {
+                var planetStatus = getPlanetStatus(temp);
+                document.getElementById('info').innerHTML = `
+                    <strong>Environmental Status:</strong><br>
+                    Location: [${lon.toFixed(2)}, ${lat.toFixed(2)}]<br>
+                    Temperature: ${temp}°C<br>
+                    Status: <span style="color:${planetStatus.color}; font-weight:bold">${planetStatus.status}</span><br>
+                    <img class="icon" src="https://img.icons8.com/ios-filled/50/000000/water.png" alt="Sea Level Icon"> Sea Level: ${additionalData.seaLevel}<br>
+                    <img class="icon" src="https://img.icons8.com/ios-filled/50/000000/temperature.png" alt="Global Temperature Icon"> Global Temperature: ${additionalData.globalTemperature}<br>
+                    <img class="icon" src="https://img.icons8.com/ios-filled/50/000000/iceberg.png" alt="Arctic Sea Ice Icon"> Arctic Sea Ice: ${additionalData.arcticSeaIce}<br>
+                    <img class="icon" src="https://img.icons8.com/ios-filled/50/000000/co2.png" alt="Carbon Dioxide Icon"> Carbon Dioxide: ${additionalData.carbonDioxide}<br>
+                    <img class="icon" src="https://img.icons8.com/ios-filled/50/000000/wind.png" alt="Wind Icon"> Wind: ${additionalData.wind}<br>
+                    <img class="icon" src="https://img.icons8.com/ios-filled/50/000000/humidity.png" alt="Humidity Icon"> Humidity: ${additionalData.humidity}
+                `;
+            } else {
+                document.getElementById('info').innerHTML = `Could not fetch weather data for coordinates: [${lon.toFixed(2)}, ${lat.toFixed(2)}]`;
+            }
+        });
+
+        document.getElementById('goLiveButton').addEventListener('click', function() {
+            window.location.href = 'goLive.html';
+        });
+
+        document.getElementById('forecastButton').addEventListener('click', function() {
+            window.location.href = 's.html';
+        });
+        document.getElementById('suggest').addEventListener('click', function() {
+            window.location.href = 'su.html';
+        });
+
+        map.on('load', function () {
+            // تحديث الخريطة أو إضافة عناصر أخرى بعد التحميل إذا لزم الأمر
+        });
+    </script>
+    <script>
+        async function getNasaEarthImage(lat, lon) {
+            const apiKey = 'OgjkNFNXngvnDwqpKrgxqXSiu8VugrKB1OqxZgqu'; // استبدل DEMO_KEY بمفتاح API الخاص بك
+            const date = new Date().toISOString().split('T')[0]; // استخدم تاريخ اليوم
+            const url = `https://api.nasa.gov/planetary/earth/assets?lon=${lon}&lat=${lat}&date=${date}&dim=0.10&api_key=${apiKey}`;
+    
+            try {
+                let response = await fetch(url);
+                let data = await response.json();
+                return data.url; // الرابط للصورة الملتقطة من القمر الصناعي
+            } catch (error) {
+                console.error("Error fetching NASA Earth image:", error);
+                return null;
+            }
+        }
+    
+        map.on('contextmenu', async function (e) {
+            var coordinates = e.lngLat;
+            var lat = coordinates.lat;
+            var lon = coordinates.lng;
+    
+            document.getElementById('info').style.display = "block";
+            document.getElementById('info').innerHTML = `Fetching environmental status for coordinates: [${lon}, ${lat}]...`;
+    
+            var temp = await getWeatherData(lat, lon);
+            var additionalData = await getAdditionalData(lat, lon);
+            var nasaImageUrl = await getNasaEarthImage(lat, lon);
+    
+            if (temp !== null) {
+                var planetStatus = getPlanetStatus(temp);
+                document.getElementById('info').innerHTML = `
+                    <strong>Environmental Status:</strong><br>
+                    Location: [${lon.toFixed(2)}, ${lat.toFixed(2)}]<br>
+                    Temperature: ${temp}°C<br>
+                    Status: <span style="color:${planetStatus.color}; font-weight:bold">${planetStatus.status}</span><br>
+                    <img class="icon" src="https://img.icons8.com/ios-filled/50/000000/water.png" alt="Sea Level Icon"> Sea Level: ${additionalData.seaLevel}<br>
+                    <img class="icon" src="https://img.icons8.com/ios-filled/50/000000/temperature.png" alt="Global Temperature Icon"> Global Temperature: ${additionalData.globalTemperature}<br>
+                    <img class="icon" src="https://img.icons8.com/ios-filled/50/000000/iceberg.png" alt="Arctic Sea Ice Icon"> Arctic Sea Ice: ${additionalData.arcticSeaIce}<br>
+                    <img class="icon" src="https://img.icons8.com/ios-filled/50/000000/co2.png" alt="Carbon Dioxide Icon"> Carbon Dioxide: ${additionalData.carbonDioxide}<br>
+                    <img class="icon" src="https://img.icons8.com/ios-filled/50/000000/wind.png" alt="Wind Icon"> Wind: ${additionalData.wind}<br>
+                    <img class="icon" src="https://img.icons8.com/ios-filled/50/000000/humidity.png" alt="Humidity Icon"> Humidity: ${additionalData.humidity}<br>
+                    <img class="icon" src="https://upload.wikimedia.org/wikipedia/commons/e/e5/NASA_logo.svg" alt="NASA Logo" style="width:20px; height:20px; vertical-align:middle;">
+                    ${nasaImageUrl ? `<img src="${nasaImageUrl}" alt="NASA Earth Image" style="width:100%; max-width:300px;"/>` : 'No image available'}
+                `;
+            } else {
+                document.getElementById('info').innerHTML = `Could not fetch weather data for coordinates: [${lon.toFixed(2)}, ${lat.toFixed(2)}]`;
+            }
+        });
+        // وظيفة تحديد الموقع
+        document.getElementById('locateButton').addEventListener('click', function () {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function (position) {
+                    const userLat = position.coords.latitude;
+                    const userLon = position.coords.longitude;
+                    map.flyTo({ center: [userLon, userLat], zoom: 8 });
+                }, function () {
+                    alert("Error getting location.");
+                });
+            } else {
+                alert("Geolocation is not supported by this browser.");
+            }
+        });
+    </script>
+    
+    
+
+</body>
+</html>
